@@ -1,0 +1,246 @@
+---
+title: "Lan_Mouland_Assign4"
+author: "Lan Dawei Y. Mouland"
+date: "2023-03-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Question 1:
+
+```{r}
+if(!(require(data.table))){install.packages('data.table')}
+library(data.table)
+if(!(require(class))){install.packages('class')}
+library(class)
+if(!(require(forecast))){install.packages('forecast')}
+library(forecast)
+if(!(require(TTR))){install.packages('TTR')}
+library(TTR)
+if(!(require(tseries))){install.packages('tseries')}
+library(tseries)
+
+
+AirQ = fread("PRSA_DataSample.csv")
+
+```
+
+Question 1a
+```{r}
+Temp.ts = ts(AirQ$TEMP, frequency = 12) 
+Temp.ts = na.interp(Temp.ts)
+Temp.ts
+```
+Question 1b
+```{r}
+par(mfrow=c(1,2))
+plot.ts(Temp.ts, main = "Temperature by month") #not plotting months 
+plot(runMean(Temp.ts, 2), main = "Temperature 2 period moving average")
+```
+
+Question 1c
+```{r}
+par(mfrow=c(1,2))
+acf(Temp.ts, main = "ACF")
+pacf(Temp.ts, main = "PACF")
+
+
+adf.test(Temp.ts) #test value is 0.01. Therefore data is stationary 
+
+```
+There is correlation between all in the ACF. There is partial correlation between the first four lags. data is stationary. Therefore we do not need to diff the data.  
+
+Question 1d: 
+
+Automatic ARIMA 
+```{r}
+fit = auto.arima(Temp.ts)
+summary(fit)
+
+pred = predict(fit, 12*2) #for 24 month prediction 
+
+ts.plot(Temp.ts, pred$pred, lty = c(1,3))
+
+```
+Answer 1d: Differencing was used. AR order is 0, MA order is 1. Seasonal model is used because of the 12 months. 
+
+Question 1e:
+
+classic decomposition
+```{r}
+plot(decompose(Temp.ts))
+```
+Holt Winters Decomposition
+```{R}
+fit3 = HoltWinters(Temp.ts)
+pred = forecast(fit3, 12*2)
+plot(pred)
+```
+
+Question 1f: 
+```{r}
+TEMP = na.interp(ts(AirQ$TEMP))
+WSPM = na.interp(ts(AirQ$WSPM))
+
+plot.ts(TEMP, WSPM, xy.lines = F, xy.labels = F)
+
+
+reg = lm(WSPM ~ TEMP)
+summary(reg)
+
+auto.arima(residuals(reg)) #NEED TO CHECK THE 95% SIG LEVEL!
+
+```
+Answer 1f: based on the p-value temperature does not significantly impact WSPM.
+
+Question 2:
+
+Question 2a:
+```{r}
+if(!(require(arules))){install.packages('arules')}
+library(arules)
+if(!(require(datasets))){install.packages('datasets')}
+library(datasets)
+
+data(Groceries)
+
+Groceries.t = as(Groceries, "transactions")
+A = as(Groceries, "matrix")
+
+rules = apriori(Groceries, parameter = list(support = 0.02, confidence = 0.4))
+
+inspect(rules)
+summary(rules)
+```
+
+Question 2b: 
+
+```{r}
+rule3 = subset(rules, size = 3)
+
+s.rule = rule3[1]
+
+s.rule@quality$support #transactions containing both a,b, and c 
+s.rule@quality$confidence #Confidence that a,b, and c are purchased together. 
+s.rule@quality$lift #factor increasing the chance of purchasing c when both a and b are purchased. 
+
+
+```
+Question 2b: The support of an item set is the proportion of transactions the rule appears in about 2.04% of the transactions.
+
+Confidence: There is a 42.5% chance that items a,b,c are purchased together. 
+
+Lift: if item a and b are purchased together there is a 1.66x chance that item c is also purchased. 
+
+Question 3: 
+
+Question 3a: 
+
+```{r}
+if(!(require(tm))){install.packages('tm')}
+library(tm)
+if(!(require(SnowballC))){install.packages('SnowballC')}
+library(SnowballC)
+text = fread("TextData.csv")
+text = text[,1:2]
+text.c = VCorpus(VectorSource(text$text))
+text.c = tm_map(text.c, stripWhitespace) #remove whitespace
+text.c = tm_map(text.c, removeWords, stopwords("english")) #remove stopwords
+text.c = tm_map(text.c, removePunctuation)
+text.c = tm_map(text.c, removeNumbers) #remove numbers 
+text.c = tm_map(text.c, content_transformer(tolower)) #make lowercase
+text.c = tm_map(text.c, stemDocument, language = "english") #stem the document 
+
+
+```
+
+Question 3b: 
+
+```{r}
+doc.mat = DocumentTermMatrix(text.c)
+#f.terms = findFreqTerms(doc.mat, lowfreq = 15)
+
+
+findAssocs(doc.mat, "perform", 0.5)
+
+findAssocs(doc.mat, "monster", 0.5)
+
+###############################################################
+
+#tdm = TermDocumentMatrix(text.c)
+#findFreqTerms(tdm, lowfreq = 30)
+#termFrequency = rowSums(as.matrix(tdm))
+#termFrequency = subset(termFrequency, termFrequency > 10)
+
+```
+
+Question 3c: 
+
+```{r}
+if(!(require(wordcloud))){install.packages('wordcloud')}
+library(wordcloud)
+
+tdm = TermDocumentMatrix(text.c)
+
+findFreqTerms(tdm, lowfreq = 30)
+termFrequency = rowSums(as.matrix(tdm))
+termFrequency = subset(termFrequency, termFrequency > 10)
+
+
+m = as.matrix(tdm)
+wordFreq = sort(rowSums(m), decreasing = TRUE)
+
+wordcloud(words = names(wordFreq), freq = wordFreq, min.freq = 20, random.order = FALSE) 
+
+
+
+
+```
+
+Question 3d: 
+
+```{r}
+tdm2 = removeSparseTerms(tdm, sparse = 0.95)
+m2 = as.matrix(tdm2)
+dist_matrix = dist(scale(tdm2))
+hc = hclust(dist_matrix,)
+plot(hc)
+
+#cutree(hc, k = 5)
+rect.hclust(hc, k = 5)
+```
+
+Question 3e: 
+
+```{r}
+#done?
+m3 = t(m2)
+
+
+set.seed(1)
+
+kmeansResult = kmeans(m3,5)
+
+summary(kmeansResult)
+```
+
+Question 3f: 
+
+```{r}
+if(!(require(syuzhet))){install.packages('syuzhet')}
+library(syuzhet)
+
+text.1 = text$text
+
+sentences = get_sentences(text.1)
+
+sentiments = get_nrc_sentiment(sentences)
+
+t_sum = colSums(sentiments)
+
+barplot(t_sum, las = 2)
+
+```
